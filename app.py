@@ -193,8 +193,14 @@ else:
         col_a, col_b = st.columns([1.35, 1], gap="large")
         with col_a:
             st.markdown("#### Your results, explained")
-            for f in sorted(r.findings, key=lambda x: STATUS_ORDER[x.status]):
+            only_flagged = st.toggle("Show only results worth asking my doctor about", value=False,
+                                     help="Hides the normal results. Switch off to see everything.")
+            shown = [f for f in r.findings if f.status != "normal"] if only_flagged else list(r.findings)
+            hidden = len(r.findings) - len(shown)
+            for f in sorted(shown, key=lambda x: STATUS_ORDER[x.status]):
                 st.markdown(finding_html(f), unsafe_allow_html=True)
+            if only_flagged and hidden:
+                st.caption(f"{hidden} normal result{'s' if hidden != 1 else ''} hidden. Switch the toggle off to see them.")
 
         with col_b:
             st.markdown("#### Your concern")
