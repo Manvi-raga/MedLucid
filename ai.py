@@ -58,28 +58,51 @@ def analyze(
         parts.append("REPORT TEXT:\n" + report_text.strip())
     parts.append(build_user_message(concern))
 
-    try:
-        client = genai.Client(api_key=api_key)
-        resp = client.models.generate_content(
-            model=model,
-            contents=parts,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=Explanation,
-                temperature=0.2,
-            ),
-        )
-        result = resp.parsed if isinstance(getattr(resp, "parsed", None), Explanation) \
-            else Explanation.model_validate_json(resp.text)
-    except AnalysisError:
-        raise
-    except Exception as e:
-        msg = str(e).lower()
-        if "api key" in msg or "permission" in msg or "401" in msg or "403" in msg:
-            raise AnalysisError("The AI service rejected the API key. Check GEMINI_API_KEY.") from e
-        if "429" in msg or "quota" in msg or "rate" in msg:
-            raise AnalysisError("The AI service is busy or over its free limit. Please try again in a minute.") from e
-        raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file.") from e
+    client = genai.Client(api_key=api_key)
+    # If the chosen model has been retired / renamed, quietly try sensible fallbacks.
+    candidates = []
+    for m in [model, "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]:
+        if m and m not in candidates:
+            candidates.append(m)
+
+    last_error = None
+    result = None
+    for m in candidates:
+        try:
+            resp = client.models.generate_content(
+                model=m,
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    response_mime_type="application/json",
+                    response_schema=Explanation,
+                    temperature=0.2,
+                ),
+            )
+            parsed = getattr(resp, "parsed", None)
+            result = parsed if isinstance(parsed, Explanation) \
+                else Explanation.model_validate_json(resp.text)
+            break
+        except Exception as e:  # noqa: BLE001
+            last_error = e
+            low = str(e).lower()
+            if "404" in low or "not_found" in low or "not found" in low or "no longer available" in low:
+                continue  # try the next model name
+            break
+
+    if result is None:
+        e = last_error
+        raw = str(e) if e else "unknown error"
+        if api_key:
+            raw = raw.replace(api_key, "***")
+        low = raw.lower()
+        detail = f" (technical detail: {type(e).__name__}: {raw[:300]})"
+        if "api key" in low or "api_key_invalid" in low or "401" in low or "403" in low or "permission" in low:
+            raise AnalysisError("The AI service rejected the API key. Check GEMINI_API_KEY in Secrets." + detail) from e
+        if "429" in low or "quota" in low or "resource_exhausted" in low:
+            raise AnalysisError("The AI service is busy or over its free limit. Please try again in a minute." + detail) from e
+        if "404" in low or "not_found" in low:
+            raise AnalysisError("The AI model name is not available. Set GEMINI_MODEL in Secrets to a current model." + detail) from e
+        raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file." + detail) from e
 
     return result, False
