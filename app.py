@@ -71,6 +71,15 @@ with st.sidebar:
         reset_all()
         st.rerun()
     st.caption(f"AI mode: {'live (' + MODEL + ')' if API_KEY else 'demo (no API key set)'}")
+    if API_KEY:
+        with st.expander("Check available models"):
+            if st.button("List models my key can use", use_container_width=True):
+                try:
+                    st.session_state["model_list"] = ai.list_models(API_KEY)
+                except Exception as e:  # noqa: BLE001
+                    st.session_state["model_list"] = [f"Could not list models: {type(e).__name__}"]
+            for name in st.session_state.get("model_list", []):
+                st.code(name, language=None)
 
 # ---------- header ----------
 st.markdown(
