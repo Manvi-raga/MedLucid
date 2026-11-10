@@ -74,6 +74,7 @@ div[data-testid="stButton"] button p {white-space: normal; line-height:1.25;}
 .ml-pic svg{display:block;width:100%;max-width:440px;margin:.6rem 0 .3rem}
 .ml-pic p{margin:.3rem 0;font-size:.9rem;line-height:1.5}
 .ml-pic .ml-pic-note{font-size:.78rem;color:#6B7F86}
+.ml-check{margin:.5rem 0;padding:.45rem .65rem;border-radius:8px;background:#FFF3DC;color:#8A5200;font-size:.85rem;line-height:1.4}
 </style>
 """
 
@@ -154,6 +155,7 @@ def finding_html(f) -> str:
     st = STATUS_STYLE[f.status]
     bar = range_bar_html(f.numeric_value, f.ref_low, f.ref_high, st["bar"])
     ref = f'<div class="ml-src">Report range: {esc(f.reference_text)}</div>' if f.reference_text and not bar else ""
+    note = (f'<div class="ml-check">&#9888; {esc(f.check_note)}</div>') if getattr(f, 'check_note', None) else ''
     src = (f'<details class="ml-src"><summary>Where this came from in your report</summary>'
            f'<code>{esc(f.source_quote)}</code></details>') if f.source_quote else ""
     return (
@@ -161,7 +163,7 @@ def finding_html(f) -> str:
         f'<div class="ml-find-top"><div><div class="ml-find-name"><span class="ml-ico">{icon_for(f.name)}</span>{esc(f.name)}</div>'
         f'<span class="ml-pill" style="background:{st["bg"]};color:{st["fg"]}">{st["label"]}</span></div>'
         f'<div class="ml-find-val">{esc(f.value_text)} <small>{esc(f.unit)}</small></div></div>'
-        f'{bar}{ref}<div class="ml-meaning">{esc(f.plain_meaning)}</div>{picture_html(f)}{src}</div>'
+        f'{bar}{ref}{note}<div class="ml-meaning">{esc(f.plain_meaning)}</div>{picture_html(f)}{src}</div>'
     )
 
 
