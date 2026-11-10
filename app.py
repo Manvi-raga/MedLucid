@@ -7,6 +7,7 @@ import streamlit as st
 
 import ai
 from samples import SAMPLE_CONCERN, SAMPLE_CONCERN_NORMAL, SAMPLE_REPORT, SAMPLE_REPORT_NORMAL
+from pdf_export import build_pdf
 from ui import CSS, counts_html, export_text, finding_html, questions_html, esc, steps_html
 
 st.set_page_config(page_title="MedLucid", page_icon="🩺", layout="wide")
@@ -55,6 +56,17 @@ def use_sample(kind: str):
 def add_quick_concern(pick: str):
     cur = st.session_state.concern.strip()
     st.session_state.concern = (cur + " " + pick).strip() if cur else pick
+
+
+def _download_summary(r):
+    """PDF that looks like the screen; plain text only if PDF creation ever fails."""
+    concern = st.session_state.used_concern
+    try:
+        st.download_button("Download summary as PDF", data=build_pdf(r, concern),
+                           file_name="medlucid-summary.pdf", mime="application/pdf", use_container_width=True)
+    except Exception:  # noqa: BLE001
+        st.download_button("Download summary (text)", data=export_text(r, concern),
+                           file_name="medlucid-summary.txt", mime="text/plain", use_container_width=True)
 
 
 # ---------- sidebar ----------
@@ -187,6 +199,7 @@ else:
         with st.expander(f"See each of the {len(r.findings)} results"):
             for f in r.findings:
                 st.markdown(finding_html(f), unsafe_allow_html=True)
+        _download_summary(r)
         st.markdown(f'<div class="ml-note"><b>Limits.</b> {esc(r.limits_note)}</div>', unsafe_allow_html=True)
     else:
         st.markdown(counts_html(r.findings), unsafe_allow_html=True)
@@ -215,8 +228,7 @@ else:
                     for t in r.terms_explained:
                         st.markdown(f"**{t.term}** — {t.meaning}")
             st.markdown(f'<div class="ml-note"><b>Limits.</b> {esc(r.limits_note)}</div>', unsafe_allow_html=True)
-            st.download_button("Download summary + questions", data=export_text(r, st.session_state.used_concern),
-                               file_name="medlucid-summary.txt", mime="text/plain", use_container_width=True)
+            _download_summary(r)
 
     st.markdown(
         '<div class="ml-disclaimer">MedLucid explains reports in plain language. It is not a diagnosis, '
