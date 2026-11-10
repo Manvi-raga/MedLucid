@@ -40,3 +40,8 @@ pre-written output (clearly labelled on screen). Useful as a fallback for presen
 ## AI-use disclosure
 Code was written with an AI assistant (Claude). The team is responsible for reviewing, running and being
 able to explain all code. Product decisions, research analysis and submission text are the team's own.
+
+
+## Safeguards in code
+- `verify.py` runs after the AI answers: it recomputes each status from the value and the range printed in the report, and flags any value that does not appear in the quoted report line ("check this against your report").
+- AI-use disclosure: the code for this safeguard was drafted with Claude; the team reviewed and tested it.
