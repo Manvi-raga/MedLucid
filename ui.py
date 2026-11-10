@@ -70,6 +70,10 @@ h1, h2, h3 {font-family: Georgia, 'Cambria', serif; color: #0B2E3A; letter-spaci
 div[data-testid="stButton"] > button[kind="primary"] {border-radius:12px; padding:.6rem 1.4rem; font-weight:600;}
 div[data-testid="stButton"] > button {border-radius:12px;}
 div[data-testid="stButton"] button p {white-space: normal; line-height:1.25;}
+.ml-ico{display:inline-flex;align-items:center;justify-content:center;width:1.9rem;height:1.9rem;margin-right:.5rem;border-radius:50%;background:#E4F1F2;font-size:1.05rem;vertical-align:middle}
+.ml-pic svg{display:block;width:100%;max-width:440px;margin:.6rem 0 .3rem}
+.ml-pic p{margin:.3rem 0;font-size:.9rem;line-height:1.5}
+.ml-pic .ml-pic-note{font-size:.78rem;color:#6B7F86}
 </style>
 """
 
@@ -124,6 +128,28 @@ def range_bar_html(value: Optional[float], low: Optional[float], high: Optional[
     )
 
 
+ICON_RULES = [
+    (("haemoglobin", "hemoglobin", "hb ", "rbc", "red blood", "wbc", "white blood", "platelet", "hematocrit", "haematocrit", "pcv", "mcv", "mch", "esr", "cbc", "ferritin", "iron"), "🩸"),
+    (("glucose", "sugar", "hba1c", "a1c", "fasting", "insulin"), "🍬"),
+    (("cholesterol", "ldl", "hdl", "triglycer", "lipid", "vldl"), "🫀"),
+    (("tsh", "thyroid", "t3", "t4"), "🦋"),
+    (("creatinine", "urea", "bun", "uric", "egfr", "kidney", "urine", "albumin", "protein"), "🫘"),
+    (("sgpt", "sgot", "alt", "ast", "bilirubin", "alkaline", "ggt", "liver"), "🧪"),
+    (("vitamin", "b12", "folate", "calcium", "d3", "25-oh"), "☀️"),
+]
+
+
+def icon_for(name: str) -> str:
+    n = (name or "").lower() + " "
+    for keys, icon in ICON_RULES:
+        if any(k in n for k in keys):
+            return icon
+    return "🔬"
+
+
+from visuals import picture_html
+
+
 def finding_html(f) -> str:
     st = STATUS_STYLE[f.status]
     bar = range_bar_html(f.numeric_value, f.ref_low, f.ref_high, st["bar"])
@@ -132,10 +158,10 @@ def finding_html(f) -> str:
            f'<code>{esc(f.source_quote)}</code></details>') if f.source_quote else ""
     return (
         f'<div class="ml-find" style="border-left-color:{st["bar"]}">'
-        f'<div class="ml-find-top"><div><div class="ml-find-name">{esc(f.name)}</div>'
+        f'<div class="ml-find-top"><div><div class="ml-find-name"><span class="ml-ico">{icon_for(f.name)}</span>{esc(f.name)}</div>'
         f'<span class="ml-pill" style="background:{st["bg"]};color:{st["fg"]}">{st["label"]}</span></div>'
         f'<div class="ml-find-val">{esc(f.value_text)} <small>{esc(f.unit)}</small></div></div>'
-        f'{bar}{ref}<div class="ml-meaning">{esc(f.plain_meaning)}</div>{src}</div>'
+        f'{bar}{ref}<div class="ml-meaning">{esc(f.plain_meaning)}</div>{picture_html(f)}{src}</div>'
     )
 
 
