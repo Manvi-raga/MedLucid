@@ -5,7 +5,7 @@ from schema import Explanation
 from prompts import SYSTEM_INSTRUCTION, build_user_message
 from samples import SAMPLES, demo_explanation
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.8-flash"
 SUPPORTED_MIME = {
     "pdf": "application/pdf",
     "png": "image/png",
@@ -61,33 +61,44 @@ def analyze(
     client = genai.Client(api_key=api_key)
     # If the chosen model has been retired / renamed, quietly try sensible fallbacks.
     candidates = []
-    for m in [model, "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]:
+    for m in [model, "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"]:
         if m and m not in candidates:
             candidates.append(m)
+
+    import time
+
+    def _busy(low):
+        return any(k in low for k in ("503", "unavailable", "overloaded", "high demand", "429", "resource_exhausted"))
 
     last_error = None
     result = None
     for m in candidates:
-        try:
-            resp = client.models.generate_content(
-                model=m,
-                contents=parts,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    response_mime_type="application/json",
-                    response_schema=Explanation,
-                    temperature=0.2,
-                ),
-            )
-            parsed = getattr(resp, "parsed", None)
-            result = parsed if isinstance(parsed, Explanation) \
-                else Explanation.model_validate_json(resp.text)
-            break
-        except Exception as e:  # noqa: BLE001
-            last_error = e
-            low = str(e).lower()
-            if "404" in low or "not_found" in low or "not found" in low or "no longer available" in low:
-                continue  # try the next model name
+        for attempt in range(3):  # retry a busy model a few times before moving on
+            try:
+                resp = client.models.generate_content(
+                    model=m,
+                    contents=parts,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        response_schema=Explanation,
+                        temperature=0.2,
+                    ),
+                )
+                parsed = getattr(resp, "parsed", None)
+                result = parsed if isinstance(parsed, Explanation) \
+                    else Explanation.model_validate_json(resp.text)
+                break
+            except Exception as e:  # noqa: BLE001
+                last_error = e
+                low = str(e).lower()
+                if "404" in low or "not_found" in low or "not found" in low or "no longer available" in low:
+                    break  # model gone: go to the next model name
+                if _busy(low) and attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                break  # busy after retries or other error: try the next model
+        if result is not None:
             break
 
     if result is None:
@@ -99,8 +110,8 @@ def analyze(
         detail = f" (technical detail: {type(e).__name__}: {raw[:300]})"
         if "api key" in low or "api_key_invalid" in low or "401" in low or "403" in low or "permission" in low:
             raise AnalysisError("The AI service rejected the API key. Check GEMINI_API_KEY in Secrets." + detail) from e
-        if "429" in low or "quota" in low or "resource_exhausted" in low:
-            raise AnalysisError("The AI service is busy or over its free limit. Please try again in a minute." + detail) from e
+        if "503" in low or "unavailable" in low or "high demand" in low or "429" in low or "quota" in low or "resource_exhausted" in low:
+            raise AnalysisError("Google's AI service is very busy right now. Please wait a minute and press Explain my report again." + detail) from e
         if "404" in low or "not_found" in low:
             raise AnalysisError("The AI model name is not available. Set GEMINI_MODEL in Secrets to a current model." + detail) from e
         raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file." + detail) from e
