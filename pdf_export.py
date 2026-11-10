@@ -175,6 +175,8 @@ def _finding_card(f):
         content += [RangeBar(inner_w, f.numeric_value, f.ref_low, f.ref_high, st["bar"]), Spacer(1, 4)]
     elif f.reference_text:
         content += [Paragraph(f"Report range: {clean(f.reference_text)}", S["small"]), Spacer(1, 3)]
+    if getattr(f, "check_note", None):
+        content += [Paragraph(f'<font color="#8A5200"><b>Check:</b> {clean(f.check_note)}</font>', S["small"]), Spacer(1, 3)]
     content.append(Paragraph(clean(f.plain_meaning), S["body"]))
     kind = V.kind_for(f.name) if f.numeric_value is not None else None
     if kind:
