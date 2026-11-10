@@ -4,6 +4,7 @@ from typing import Optional
 from schema import Explanation
 from prompts import SYSTEM_INSTRUCTION, build_user_message
 from samples import SAMPLES, demo_explanation
+from verify import verify
 
 DEFAULT_MODEL = "gemini-3.8-flash"
 SUPPORTED_MIME = {
@@ -130,6 +131,10 @@ def analyze(
             raise AnalysisError("The AI model name is not available. Set GEMINI_MODEL in Secrets to a current model." + detail) from e
         raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file." + detail) from e
 
+    changed = verify(result)
+    if changed:
+        result.limits_note = (result.limits_note + " Some statuses were re-checked automatically against the "
+                              "ranges printed in your report.").strip()
     return result, False
 
 
