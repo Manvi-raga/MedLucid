@@ -77,7 +77,7 @@ def analyze(
             response_mime_type="application/json",
             response_schema=Explanation,
             temperature=0.2,
-            max_output_tokens=6000,
+            max_output_tokens=9000,
         )
         if fast:
             # Little/no "thinking": reading a report into a fixed JSON shape does not need it.
