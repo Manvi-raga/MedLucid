@@ -18,6 +18,7 @@ class Finding(BaseModel):
     )
     plain_meaning: str = Field(description="Plain-language explanation (about Grade 8 reading level). Borderline or attention results: a 3-5 sentence paragraph covering what the test measures, where the value sits versus the printed range, what it is commonly associated with (as possibilities, never a diagnosis), and what it cannot tell. Normal results: 1-2 sentences.")
     source_quote: str = Field(description="The exact line or phrase from the report this finding came from")
+    check_note: Optional[str] = Field(default=None, description="Always leave null. This field is filled in by the app, not by you.")
 
 
 class Term(BaseModel):
