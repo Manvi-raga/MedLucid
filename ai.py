@@ -61,7 +61,7 @@ def analyze(
     # Hard time limit per attempt so the app never hangs for minutes.
     client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=40_000))  # 40 s
     candidates = []
-    for m in [model, "gemini-3.8-flash", "gemini-flash-latest"]:
+    for m in [model, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"]:
         if m and m not in candidates:
             candidates.append(m)
 
@@ -85,6 +85,7 @@ def analyze(
         return types.GenerateContentConfig(**kwargs)
 
     last_error = None
+    errors = []
     result = None
     fast = True
     for m in candidates:
@@ -97,6 +98,7 @@ def analyze(
                 break
             except Exception as e:  # noqa: BLE001
                 last_error = e
+                errors.append((m, type(e).__name__ + ": " + str(e)[:160]))
                 low = str(e).lower()
                 if "thinking" in low and fast:
                     fast = False  # this model rejects the thinking setting: retry without it
@@ -111,16 +113,19 @@ def analyze(
             break
 
     if result is None:
-        e = last_error
-        raw = str(e) if e else "unknown error"
+        first_err = errors[0][1] if errors else "unknown error"
+        shown = " | ".join(f"{m}: {msg}" for m, msg in errors[:4]) or first_err
         if api_key:
-            raw = raw.replace(api_key, "***")
-        low = raw.lower()
-        detail = f" (technical detail: {type(e).__name__}: {raw[:300]})"
+            shown = shown.replace(api_key, "***")
+        detail = f" (technical detail: {shown[:700]})"
+        low = first_err.lower()
+        e = last_error
         if "api key" in low or "api_key_invalid" in low or "401" in low or "403" in low or "permission" in low:
             raise AnalysisError("The AI service rejected the API key. Check GEMINI_API_KEY in Secrets." + detail) from e
         if "503" in low or "unavailable" in low or "high demand" in low or "429" in low or "quota" in low or "resource_exhausted" in low:
             raise AnalysisError("Google's AI service is very busy right now. Please wait a minute and press Explain my report again." + detail) from e
+        if "timed out" in low or "timeout" in low or "deadline" in low:
+            raise AnalysisError("The AI took too long to answer. Please press Explain my report again." + detail) from e
         if "404" in low or "not_found" in low:
             raise AnalysisError("The AI model name is not available. Set GEMINI_MODEL in Secrets to a current model." + detail) from e
         raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file." + detail) from e
