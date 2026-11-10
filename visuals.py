@@ -28,6 +28,10 @@ CAPTIONS = {
 }
 
 # fixed positions inside a 100 x 44 vessel (x, y), so pictures are identical every time
+SUGAR_N = (2, 6, 12)
+CELL_N = (3, 7, 12)
+ARTERY_LUMEN = (24, 20, 14)
+
 _POS = [(14, 12), (32, 30), (50, 14), (68, 31), (84, 13), (22, 24), (41, 22), (60, 24), (77, 24),
         (9, 30), (92, 28), (50, 33)]
 
@@ -96,11 +100,11 @@ def schematic_svg(kind: str, f) -> str:
     panels = ""
     for i, x in enumerate(xs):
         if base == "sugar":
-            panels += _sugar_panel(x, (2, 6, 12)[i])
+            panels += _sugar_panel(x, SUGAR_N[i])
         elif base == "haemoglobin":
-            panels += _cell_panel(x, (3, 7, 12)[i])
+            panels += _cell_panel(x, CELL_N[i])
         else:
-            panels += _artery_panel(x, (24, 20, 14)[i])
+            panels += _artery_panel(x, ARTERY_LUMEN[i])
     labels = LABELS[base]
     texts = ""
     for i, x in enumerate(xs):
