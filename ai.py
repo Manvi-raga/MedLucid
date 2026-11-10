@@ -58,33 +58,39 @@ def analyze(
         parts.append("REPORT TEXT:\n" + report_text.strip())
     parts.append(build_user_message(concern))
 
-    client = genai.Client(api_key=api_key)
-    # If the chosen model has been retired / renamed, quietly try sensible fallbacks.
+    # Hard time limit per attempt so the app never hangs for minutes.
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=40_000))  # 40 s
     candidates = []
-    for m in [model, "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"]:
+    for m in [model, "gemini-3.8-flash", "gemini-flash-latest"]:
         if m and m not in candidates:
             candidates.append(m)
 
     import time
 
     def _busy(low):
-        return any(k in low for k in ("503", "unavailable", "overloaded", "high demand", "429", "resource_exhausted"))
+        return any(k in low for k in ("503", "unavailable", "overloaded", "high demand", "429",
+                                      "resource_exhausted", "timed out", "timeout", "deadline"))
+
+    def _config(fast: bool):
+        kwargs = dict(
+            system_instruction=SYSTEM_INSTRUCTION,
+            response_mime_type="application/json",
+            response_schema=Explanation,
+            temperature=0.2,
+            max_output_tokens=6000,
+        )
+        if fast:
+            # Little/no "thinking": reading a report into a fixed JSON shape does not need it.
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        return types.GenerateContentConfig(**kwargs)
 
     last_error = None
     result = None
+    fast = True
     for m in candidates:
-        for attempt in range(3):  # retry a busy model a few times before moving on
+        for attempt in range(2):  # at most one retry per model
             try:
-                resp = client.models.generate_content(
-                    model=m,
-                    contents=parts,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        response_mime_type="application/json",
-                        response_schema=Explanation,
-                        temperature=0.2,
-                    ),
-                )
+                resp = client.models.generate_content(model=m, contents=parts, config=_config(fast))
                 parsed = getattr(resp, "parsed", None)
                 result = parsed if isinstance(parsed, Explanation) \
                     else Explanation.model_validate_json(resp.text)
@@ -92,12 +98,15 @@ def analyze(
             except Exception as e:  # noqa: BLE001
                 last_error = e
                 low = str(e).lower()
-                if "404" in low or "not_found" in low or "not found" in low or "no longer available" in low:
-                    break  # model gone: go to the next model name
-                if _busy(low) and attempt < 2:
-                    time.sleep(2 * (attempt + 1))
+                if "thinking" in low and fast:
+                    fast = False  # this model rejects the thinking setting: retry without it
                     continue
-                break  # busy after retries or other error: try the next model
+                if "404" in low or "not_found" in low or "no longer available" in low:
+                    break  # model gone: next model
+                if _busy(low) and attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                break
         if result is not None:
             break
 
@@ -117,3 +126,15 @@ def analyze(
         raise AnalysisError("Something went wrong while reading the report. Please try again, or try a clearer file." + detail) from e
 
     return result, False
+
+
+def list_models(api_key: str) -> list[str]:
+    """Names of models this key can use for generating content (used by the sidebar check)."""
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    names = []
+    for m in client.models.list():
+        actions = getattr(m, "supported_actions", None) or []
+        if "generateContent" in actions:
+            names.append((m.name or "").replace("models/", ""))
+    return sorted(set(n for n in names if n))
